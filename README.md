@@ -54,7 +54,9 @@ directory, `fsync`, then `rename`. So:
   writable by group or others is refused before anything is written.
 
 It does not create the directory. On Windows there is no mode to read; the
-owner-only access list arrives with go-authn/kinit's Windows code.
+file is made with a protected access list holding one entry, the current
+account, set by CreateFile (go-authn/kinit v0.3.2's list), so the folder's
+entries are never inherited.
 
 ## Floors
 

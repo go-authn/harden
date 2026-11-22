@@ -20,6 +20,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-// protect: the file inherits the directory's access list. An owner-only list
-// belongs here (go-authn/kinit's Windows code, once it is released).
+// protect: nothing to do after the write. On Windows the owner-only access
+// list was set when the file was made (temp_windows.go); elsewhere there is
+// no mode to set.
 func protect(file) error { return nil }

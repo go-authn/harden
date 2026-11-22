@@ -38,7 +38,8 @@ jobs:
           if [ -n "$unformatted" ]; then
             echo "::error::these files are not gofmt-clean:"; echo "$unformatted"; exit 1
           fi
-      - run: go test -count=1 ./...
+      # -v: the log must show the Windows DACL tests as PASS, not as skipped.
+      - run: go test -v -count=1 ./...
 
   race:
     name: race detector
