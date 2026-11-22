@@ -1,0 +1,127 @@
+// Package redirect holds the one rule go-authn clients apply before a token, a
+// key set or a signed assertion crosses a link: the URL is https, or it names
+// this machine.
+//
+// It is the rule go-authn/oidc wrote first (jwks.go) and rp, awscred, saml and
+// wireguard each copied; the copies differed in small ways, and this is the
+// strictest of them.
+package redirect
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"strings"
+)
+
+// MaxRedirects is how many redirects [CheckRedirect] lets a request follow.
+const MaxRedirects = 10
+
+// CheckRedirect is an [http.Client] CheckRedirect policy: it stops after
+// [MaxRedirects] redirects and refuses one whose target is not https and not
+// loopback, so an https endpoint cannot hand a token to somebody on the way by
+// redirecting to cleartext http.
+//
+// A client that already has its own policy calls CheckRedirect first and its
+// own after.
+func CheckRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= MaxRedirects {
+		return fmt.Errorf("redirect: stopped after %d redirects", MaxRedirects)
+	}
+	if req == nil || req.URL == nil {
+		return errors.New("redirect: a redirect with no URL")
+	}
+	if err := HTTPSOrLoopback(req.URL.String()); err != nil {
+		return fmt.Errorf("a redirect leaves https: %w", err)
+	}
+	return nil
+}
+
+// HTTPSOrLoopback returns nil when rawURL is an https URL with a host, or an
+// http URL whose host is [Loopback]. Anything else is an error: cleartext http
+// to another host, another scheme, no host, or a string that is not a URL.
+//
+// The error names the scheme and host only: a URL may carry a password or a
+// token in its query, and an error is logged.
+func HTTPSOrLoopback(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return errors.New("redirect: not a URL")
+	}
+	host := u.Hostname()
+	switch {
+	case host == "":
+		return fmt.Errorf("redirect: %q URL without a host", u.Scheme)
+	case u.Scheme == "https":
+		return nil
+	case u.Scheme == "http" && Loopback(host):
+		return nil
+	}
+	return fmt.Errorf("redirect: %s://%s is neither https nor loopback", u.Scheme, host)
+}
+
+// Loopback reports whether host, as [url.URL.Hostname] returns it (no port, no
+// brackets), is this machine:
+//
+//   - an IP literal that is loopback: 127.0.0.0/8, ::1, or an IPv4-mapped
+//     loopback such as ::ffff:127.0.0.1 (a zone is refused);
+//   - the name "localhost" or a name under ".localhost" (RFC 6761 section 6.3),
+//     in any letter case, with or without the trailing dot of a fully
+//     qualified name.
+//
+// It never matches a string prefix: 127.evil.example is somebody's DNS name.
+// A form no resolver reads as an address, 0x7f.1 or 127.1 or a decimal
+// integer, is not an IP literal here and is refused.
+func Loopback(host string) bool {
+	if a, err := netip.ParseAddr(host); err == nil {
+		return a.Zone() == "" && a.Unmap().IsLoopback()
+	}
+	name := asciiLower(strings.TrimSuffix(host, "."))
+	if name == "localhost" {
+		return true
+	}
+	sub, ok := strings.CutSuffix(name, ".localhost")
+	if !ok {
+		return false
+	}
+	for _, label := range strings.Split(sub, ".") {
+		if !hostLabel(label) {
+			return false
+		}
+	}
+	return true
+}
+
+// asciiLower lower-cases s, and returns "" (a name that is nothing) for a byte
+// outside ASCII: Unicode case folding maps other letters onto ASCII ones (the
+// Kelvin sign is "k", the long s is "s"), and a host name that needs it is not
+// one this package vouches for.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		switch {
+		case c >= 0x80:
+			return ""
+		case 'A' <= c && c <= 'Z':
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
+// hostLabel reports whether label is a non-empty run of letters, digits,
+// hyphens and underscores.
+func hostLabel(label string) bool {
+	if label == "" {
+		return false
+	}
+	for i := 0; i < len(label); i++ {
+		c := label[i]
+		if !('a' <= c && c <= 'z' || '0' <= c && c <= '9' || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
