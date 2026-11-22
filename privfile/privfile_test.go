@@ -94,9 +94,14 @@ func (f *fake) Name() string                { return f.name }
 
 func TestFillReportsEachStepAndAlwaysCloses(t *testing.T) {
 	boom := errors.New("boom")
-	for name, f := range map[string]*fake{
-		"write": {werr: boom}, "protect": {cherr: boom}, "sync": {serr: boom}, "close": {clerr: boom},
-	} {
+	cases := map[string]*fake{
+		"write": {werr: boom}, "sync": {serr: boom}, "close": {clerr: boom},
+	}
+	// Only where protect asks the file for something can the file refuse.
+	for name, f := range protectCases(boom) {
+		cases[name] = f
+	}
+	for name, f := range cases {
 		if err := fill(f, []byte("x")); !errors.Is(err, boom) {
 			t.Errorf("%s: %v", name, err)
 		}
