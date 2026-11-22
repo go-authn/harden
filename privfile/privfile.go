@@ -85,7 +85,7 @@ func fill(f file, data []byte) error {
 
 // Replaced by tests.
 var (
-	createTemp = func(dir, pattern string) (namedFile, error) { return os.CreateTemp(dir, pattern) }
+	createTemp = newTemp
 	rename     = os.Rename
 )
 
