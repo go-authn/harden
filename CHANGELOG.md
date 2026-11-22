@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.0
+
+- New package `memlock`, moved from go-theca/theca `internal/memlock` (theca#68)
+  with no theca names: `Lock` and `Region` (page-counted mlock, and VirtualLock
+  on Windows, which theca never had), `Locker`/`NewLocker`/`Syscalls` for tests,
+  `DisableDumps` (RLIMIT_CORE, PR_SET_DUMPABLE on Linux, PT_DENY_ATTACH on
+  macOS), and the typed `*UnsupportedError`.
+- A refused lock is an error. The one tolerant call is named `LockBestEffort`.
+  theca's mode policy (`--mlock auto|off|required`) stays in theca.
+
 ## v0.2.0
 
 - `privfile.Write` on Windows makes its temporary file with a protected DACL
