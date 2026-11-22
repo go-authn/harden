@@ -12,14 +12,19 @@ import (
 func unmappedPage(t *testing.T) (unsafe.Pointer, uintptr) {
 	t.Helper()
 	size := pageSize()
-	addr, err := windows.VirtualAlloc(0, size, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
+	// Reserved and never committed, and kept reserved until the test ends: a
+	// freed address can be handed back to the runtime between two calls (seen
+	// on windows-latest), a reserved one cannot, and VirtualLock refuses it.
+	addr, err := windows.VirtualAlloc(0, size, windows.MEM_RESERVE, windows.PAGE_NOACCESS)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := windows.VirtualFree(addr, 0, windows.MEM_RELEASE); err != nil {
-		t.Fatal(err)
-	}
-	// The address is not Go memory: it was just freed, and converts as a word.
+	t.Cleanup(func() {
+		if err := windows.VirtualFree(addr, 0, windows.MEM_RELEASE); err != nil {
+			t.Error(err)
+		}
+	})
+	// The address is not Go memory, and converts as a word.
 	return *(*unsafe.Pointer)(unsafe.Pointer(&addr)), size
 }
 
