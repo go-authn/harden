@@ -97,6 +97,27 @@ jobs:
         with: { go-version-file: go.mod, check-latest: true, cache: true }
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+  # Systems with no page lock: memlock's typed-unsupported files are built and
+  # vetted here, since no other job compiles them.
+  oses:
+    name: os ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: solaris, goarch: amd64 }
+          - { goos: js, goarch: wasm }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod, check-latest: true, cache: true }
+      - run: go vet ./...
+      - run: go test -c -o /dev/null ./memlock
+
   # 32-bit and other word sizes: built everywhere, run where the runner can.
   arches:
     name: arch ${{ matrix.goarch }}
